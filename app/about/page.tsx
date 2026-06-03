@@ -1,6 +1,6 @@
 import { Metadata } from 'next'
 import Link from 'next/link'
-import { Users, Target, Heart, Award, MapPin, Star, Phone, Mail, Globe, CheckCircle } from 'lucide-react'
+import {  Target, Heart, CheckCircle } from 'lucide-react'
 
 export const metadata: Metadata = {
   title: 'About Us - Lawn Mower Directory',

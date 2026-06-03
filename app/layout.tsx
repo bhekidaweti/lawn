@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { Navbar, Footer } from '@/components'
 import './globals.css'
+import Script from "next/script";
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -13,7 +14,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Lawn Mower Directory',
     description: 'Find the best lawn mower services near you',
-    url: 'https://lawnmowerdir.com',
+    url: 'https://www.lawnmowingnearme.org',
     siteName: 'Lawn Mower Directory',
     images: [
       {
@@ -53,6 +54,19 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-HS88FYGGK6"
+          strategy="afterInteractive"
+        />
+
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-HS88FYGGK6');
+          `}
+        </Script>
    
       </head>
       <body className={inter.className}>     

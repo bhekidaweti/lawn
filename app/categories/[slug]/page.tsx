@@ -32,9 +32,7 @@ export default async function CategoryPage({ params }: PageProps) {
     .order('rating', { ascending: false })
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Navbar />
-      
+    <div className="min-h-screen bg-gray-50 flex flex-col">      
       <main className="flex-grow">
         {/* Header */}
         <div className="bg-gradient-to-r from-green-600 to-green-800 text-white py-12">
@@ -124,8 +122,6 @@ export default async function CategoryPage({ params }: PageProps) {
           </div>
         </div>
       </main>
-
-      <Footer />
     </div>
   )
 }

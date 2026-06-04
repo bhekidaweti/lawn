@@ -102,7 +102,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }))
   
   // Service + city combinations (popular combinations)
-  const services = ['repair', 'maintenance', 'sharpening', 'sales', 'parts', 'landscaping']
+  const services = ['grass-cutting-service','lawn-fertilization','landscape-architect', 'irrigation-installation', 'lawn-maintenance', 'landscaping', 'garden-care', 'hedge-trimming', 'canberra-gardens', 'evergreen-eco-gardening','lawn-mowing-service','lawn-care', 'lawn-treatment', 'mulching-services', 'tree-service-landscaping', 'yard-care-service']
   const popularCities = uniqueCities.slice(0, 20) // Top 20 cities for service pages
   
   const serviceCityRoutes = popularCities.flatMap(({ city }) =>

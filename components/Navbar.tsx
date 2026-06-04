@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { Menu, X, Search, User, Globe, ChevronDown } from 'lucide-react'
@@ -12,39 +12,69 @@ export default function Navbar() {
   const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false)
   const [selectedCountry, setSelectedCountry] = useState<string>('USA')
   const [countries, setCountries] = useState<string[]>([])
+  const [isLoadingCountries, setIsLoadingCountries] = useState(true)
   const router = useRouter()
   const pathname = usePathname()
 
-  useEffect(() => {
-    // Load selected country from localStorage
-    const savedCountry = localStorage.getItem('selectedCountry')
-    if (savedCountry) {
-      setSelectedCountry(savedCountry)
-    }
-
-    // Fetch available countries using BROWSER client
-    async function fetchCountries() {
-      const supabase = createClient() // ← This is safe in Client Component
-      const { data } = await supabase
+  // Fetch available countries
+  const fetchCountries = useCallback(async () => {
+    try {
+      setIsLoadingCountries(true)
+      const supabase = createClient()
+      const { data, error } = await supabase
         .from('businesses')
         .select('country')
         .not('country', 'is', null)
       
-      if (data) {
-        const uniqueCountries = [...new Set(data.map(b => b.country))]
-        setCountries(uniqueCountries as string[])
+      if (error) {
+        console.error('Error fetching countries:', error)
+        return
       }
+      
+      if (data && data.length > 0) {
+        const uniqueCountries = [...new Set(data.map(b => b.country).filter(Boolean))]
+        setCountries(uniqueCountries as string[])
+        
+        // If selected country isn't in the list, update it
+        if (uniqueCountries.length > 0 && !uniqueCountries.includes(selectedCountry)) {
+          setSelectedCountry(uniqueCountries[0])
+          localStorage.setItem('selectedCountry', uniqueCountries[0])
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch countries:', err)
+    } finally {
+      setIsLoadingCountries(false)
+    }
+  }, [selectedCountry])
+
+  // Load selected country from localStorage and fetch countries
+  useEffect(() => {
+    // Load saved country
+    const savedCountry = localStorage.getItem('selectedCountry')
+    if (savedCountry) {
+      setSelectedCountry(savedCountry)
     }
     
+    // Fetch countries
     fetchCountries()
-  }, [])
+  }, [fetchCountries])
+
+  // Update countries when pathname changes (in case new businesses are added)
+  useEffect(() => {
+    fetchCountries()
+  }, [pathname, fetchCountries])
 
   const handleCountrySelect = (country: string) => {
     setSelectedCountry(country)
     localStorage.setItem('selectedCountry', country)
     setIsCountryDropdownOpen(false)
     
+    // Only navigate if we're not already on a country page
     if (!pathname.includes('/countries/')) {
+      router.push(`/countries/${country.toLowerCase().replace(/ /g, '-')}`)
+    } else {
+      // If on a country page, refresh to show new country
       router.push(`/countries/${country.toLowerCase().replace(/ /g, '-')}`)
     }
   }
@@ -55,13 +85,16 @@ export default function Navbar() {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2">
-             <div className="flex items-center justify-center overflow-hidden rounded-lg">
-            <Image src="/law-logo.png"
-             alt="logo" width={50} height={50} 
-             className="h-auto w-auto object-cover" 
-             priority 
-             />
-          </div>
+            <div className="flex items-center justify-center overflow-hidden rounded-lg">
+              <Image
+                src="/law-logo.png"
+                alt="logo" 
+                width={50} 
+                height={50} 
+                className="h-auto w-auto object-cover" 
+                priority 
+              />
+            </div>
           </Link>
 
           {/* Desktop Navigation */}
@@ -84,18 +117,24 @@ export default function Navbar() {
                     onClick={() => setIsCountryDropdownOpen(false)}
                   />
                   <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-lg border z-50 overflow-hidden">
-                    <div className="p-2">
-                      {countries.map((country) => (
-                        <button
-                          key={country}
-                          onClick={() => handleCountrySelect(country)}
-                          className={`w-full text-left px-4 py-2 rounded-lg hover:bg-gray-50 transition ${
-                            selectedCountry === country ? 'bg-green-50 text-green-600' : ''
-                          }`}
-                        >
-                          {country}
-                        </button>
-                      ))}
+                    <div className="p-2 max-h-80 overflow-y-auto">
+                      {isLoadingCountries ? (
+                        <div className="px-4 py-2 text-gray-500 text-sm">Loading countries...</div>
+                      ) : countries.length === 0 ? (
+                        <div className="px-4 py-2 text-gray-500 text-sm">No countries available</div>
+                      ) : (
+                        countries.map((country) => (
+                          <button
+                            key={country}
+                            onClick={() => handleCountrySelect(country)}
+                            className={`w-full text-left px-4 py-2 rounded-lg hover:bg-gray-50 transition ${
+                              selectedCountry === country ? 'bg-green-50 text-green-600' : ''
+                            }`}
+                          >
+                            {country}
+                          </button>
+                        ))
+                      )}
                     </div>
                   </div>
                 </>
@@ -109,10 +148,13 @@ export default function Navbar() {
               Categories
             </Link>
             <Link href="/near-me" className="text-gray-700 hover:text-green-600 transition">
-              Near Me Services 
+              Near Me
             </Link>
-            <Link href="/services" className="text-gray-700 hover:text-green-600 transition">
-              Services
+            <Link href="/about" className="text-gray-700 hover:text-green-600 transition">
+              About
+            </Link>
+            <Link href="/contact" className="text-gray-700 hover:text-green-600 transition">
+              Contact
             </Link>
             
             {/* Quick Search by City */}
@@ -126,6 +168,8 @@ export default function Navbar() {
                     const city = (e.target as HTMLInputElement).value
                     if (city) {
                       router.push(`/near-me/${encodeURIComponent(city.replace(/ /g, '-'))}`)
+                      // Clear input after search
+                      ;(e.target as HTMLInputElement).value = ''
                     }
                   }
                 }}
@@ -159,9 +203,15 @@ export default function Navbar() {
                   onChange={(e) => handleCountrySelect(e.target.value)}
                   className="w-full p-2 border rounded-lg"
                 >
-                  {countries.map((country) => (
-                    <option key={country} value={country}>{country}</option>
-                  ))}
+                  {isLoadingCountries ? (
+                    <option>Loading countries...</option>
+                  ) : countries.length === 0 ? (
+                    <option>No countries available</option>
+                  ) : (
+                    countries.map((country) => (
+                      <option key={country} value={country}>{country}</option>
+                    ))
+                  )}
                 </select>
               </div>
               
@@ -176,6 +226,12 @@ export default function Navbar() {
               </Link>
               <Link href="/services" className="text-gray-700 hover:text-green-600 py-2" onClick={() => setIsMenuOpen(false)}>
                 Services
+              </Link>
+              <Link href="/about" className="text-gray-700 hover:text-green-600 py-2" onClick={() => setIsMenuOpen(false)}>
+                About
+              </Link>
+              <Link href="/contact" className="text-gray-700 hover:text-green-600 py-2" onClick={() => setIsMenuOpen(false)}>
+                Contact
               </Link>
               <button className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
                 List Your Business

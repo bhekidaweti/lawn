@@ -8,7 +8,7 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* About Section */}
           <div>
-            <h3 className="text-xl font-bold mb-4">LawnMowerDir</h3>
+            <h3 className="text-xl font-bold mb-4">LawnMowingNearMe</h3>
             <p className="text-gray-400 text-sm">
               Connecting you with the best lawn mower services across the country.
               Find repair, maintenance, and sales professionals near you.
@@ -42,32 +42,7 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Categories */}
-          <div>
-            <h3 className="text-lg font-semibold mb-4">Categories</h3>
-            <ul className="space-y-2">
-              <li>
-                <Link href="/categories/repair" className="text-gray-400 hover:text-white transition">
-                  Lawn Mower Repair
-                </Link>
-              </li>
-              <li>
-                <Link href="/categories/maintenance" className="text-gray-400 hover:text-white transition">
-                  Maintenance
-                </Link>
-              </li>
-              <li>
-                <Link href="/categories/sales" className="text-gray-400 hover:text-white transition">
-                  Sales
-                </Link>
-              </li>
-              <li>
-                <Link href="/categories/sharpening" className="text-gray-400 hover:text-white transition">
-                  Blade Sharpening
-                </Link>
-              </li>
-            </ul>
-          </div>
+          
 
           {/* Contact Info */}
           <div>

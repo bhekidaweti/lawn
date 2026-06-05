@@ -1,20 +1,30 @@
 import { createClient } from '@/utils/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import Navbar from '@/components/Navbar'
-import Footer from '@/components/Footer'
 import ListingCard from '@/components/ListingCard'
 import SearchBar from '@/components/Searchbar'
-import { ArrowLeft, Filter } from 'lucide-react'
+import CategoryFilters from '@/components/CategoryFilters'
+import { ArrowLeft } from 'lucide-react'
 
 interface PageProps {
   params: Promise<{ slug: string }>
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }
 
-export default async function CategoryPage({ params }: PageProps) {
+// Helper to safely parse rating from text
+function parseRating(rating: string | null): number {
+  if (!rating) return 0
+  const parsed = parseFloat(rating)
+  return isNaN(parsed) ? 0 : parsed
+}
+
+export default async function CategoryPage({ params, searchParams }: PageProps) {
   const { slug } = await params
+  const resolvedSearchParams = await searchParams
+  
   const supabase = await createClient()
   
+  // Get category details
   const { data: category } = await supabase
     .from('categories')
     .select('*')
@@ -25,11 +35,92 @@ export default async function CategoryPage({ params }: PageProps) {
     notFound()
   }
   
-  const { data: businesses } = await supabase
+  // Get filter values from URL
+  const selectedCity = (resolvedSearchParams.city as string) || 'all'
+  const selectedRating = (resolvedSearchParams.rating as string) || 'all'
+  const sortBy = (resolvedSearchParams.sort as string) || 'rating-desc'
+  
+  // Build the query
+  let query = supabase
     .from('businesses')
     .select('*')
     .eq('category', category.name)
-    .order('rating', { ascending: false })
+  
+  // Apply city filter
+  if (selectedCity && selectedCity !== 'all') {
+    query = query.eq('city', selectedCity)
+  }
+  
+  // Execute query
+  let { data: businesses } = await query
+  
+  // Apply rating filter (client-side since rating is text in DB)
+  if (businesses && selectedRating !== 'all') {
+    const minRating = parseFloat(selectedRating)
+    businesses = businesses.filter(business => {
+      const rating = parseRating(business.rating)
+      return rating >= minRating
+    })
+  }
+  
+  // Apply sorting
+  if (businesses) {
+    switch (sortBy) {
+      case 'rating-desc':
+        businesses.sort((a, b) => parseRating(b.rating) - parseRating(a.rating))
+        break
+      case 'rating-asc':
+        businesses.sort((a, b) => parseRating(a.rating) - parseRating(b.rating))
+        break
+      case 'name-asc':
+        businesses.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+        break
+      case 'name-desc':
+        businesses.sort((a, b) => (b.name || '').localeCompare(a.name || ''))
+        break
+      case 'recent':
+        businesses.sort((a, b) => 
+          new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+        )
+        break
+      default:
+        businesses.sort((a, b) => parseRating(b.rating) - parseRating(a.rating))
+    }
+  }
+  
+  // Get unique cities for this category from the database
+  const { data: cityData } = await supabase
+    .from('businesses')
+    .select('city')
+    .eq('category', category.name)
+    .not('city', 'is', null)
+    .neq('city', '')
+  
+  const uniqueCities = [...new Set(cityData?.map(c => c.city).filter(Boolean) || [])]
+  
+  // Calculate city counts
+  const cityCounts: Record<string, number> = {}
+  uniqueCities.forEach(city => {
+    cityCounts[city] = businesses?.filter(b => b.city === city).length || 0
+  })
+  
+  // Calculate rating distribution
+  const ratingCounts = {
+    '4.5': 0,
+    '4.0': 0,
+    '3.5': 0,
+    '3.0': 0,
+  }
+  
+  businesses?.forEach(business => {
+    const rating = parseRating(business.rating)
+    if (rating >= 4.5) ratingCounts['4.5']++
+    else if (rating >= 4.0) ratingCounts['4.0']++
+    else if (rating >= 3.5) ratingCounts['3.5']++
+    else if (rating >= 3.0) ratingCounts['3.0']++
+  })
+
+  const hasActiveFilters = selectedCity !== 'all' || selectedRating !== 'all' || sortBy !== 'rating-desc'
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">      
@@ -53,68 +144,51 @@ export default async function CategoryPage({ params }: PageProps) {
 
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col lg:flex-row gap-8">
-            {/* Filters Sidebar */}
+            {/* Filters Sidebar - Now a Client Component */}
             <div className="lg:w-1/4">
-              <div className="bg-white rounded-lg shadow-md p-6 sticky top-4">
-                <div className="flex items-center gap-2 mb-4">
-                  <Filter size={20} />
-                  <h3 className="font-bold text-lg">Filters</h3>
-                </div>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="font-medium mb-2 block">City</label>
-                    <select className="w-full p-2 border rounded-lg">
-                      <option>All Cities</option>
-                      <option>Los Angeles</option>
-                      <option>San Diego</option>
-                      <option>San Francisco</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="font-medium mb-2 block">Rating</label>
-                    <select className="w-full p-2 border rounded-lg">
-                      <option>All Ratings</option>
-                      <option>4+ Stars</option>
-                      <option>3+ Stars</option>
-                      <option>2+ Stars</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="font-medium mb-2 block">Sort By</label>
-                    <select className="w-full p-2 border rounded-lg">
-                      <option>Rating (Highest)</option>
-                      <option>Rating (Lowest)</option>
-                      <option>Name A-Z</option>
-                      <option>Recently Added</option>
-                    </select>
-                  </div>
-                </div>
-                
-                <button className="w-full mt-6 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700">
-                  Apply Filters
-                </button>
-              </div>
+              <CategoryFilters
+                categorySlug={slug}
+                uniqueCities={uniqueCities}
+                cityCounts={cityCounts}
+                ratingCounts={ratingCounts}
+                totalBusinesses={businesses?.length || 0}
+                selectedCity={selectedCity}
+                selectedRating={selectedRating}
+                sortBy={sortBy}
+              />
             </div>
 
             {/* Business Listings */}
             <div className="lg:w-3/4">
-              <div className="mb-4 flex justify-between items-center">
-                <p className="text-gray-600">{businesses?.length || 0} businesses found</p>
-                <button className="text-green-600 hover:underline text-sm">Reset filters</button>
+              <div className="mb-4 flex flex-wrap justify-between items-center gap-2">
+                <p className="text-gray-600">
+                  Found <span className="font-semibold text-green-600">{businesses?.length || 0}</span> businesses
+                  {selectedCity !== 'all' && <span> in <span className="font-semibold">{selectedCity}</span></span>}
+                </p>
+                {hasActiveFilters && (
+                  <Link 
+                    href={`/categories/${slug}`}
+                    className="text-green-600 hover:text-green-700 text-sm flex items-center gap-1"
+                  >
+                    Clear all filters
+                  </Link>
+                )}
               </div>
               
               <div className="space-y-4">
-                {businesses?.map((business) => (
-                  <ListingCard key={business.id} business={business} variant="default" />
-                ))}
-                
-                {businesses?.length === 0 && (
+                {businesses && businesses.length > 0 ? (
+                  businesses.map((business) => (
+                    <ListingCard key={business.id} business={business} variant="default" />
+                  ))
+                ) : (
                   <div className="bg-white rounded-lg p-12 text-center">
-                    <p className="text-gray-500">No businesses found in this category yet.</p>
-                    <p className="text-sm text-gray-400 mt-2">Check back soon!</p>
+                    <p className="text-gray-500">No businesses found matching your filters.</p>
+                    <Link 
+                      href={`/categories/${slug}`}
+                      className="inline-block mt-4 text-green-600 hover:underline"
+                    >
+                      Clear all filters
+                    </Link>
                   </div>
                 )}
               </div>
@@ -124,4 +198,4 @@ export default async function CategoryPage({ params }: PageProps) {
       </main>
     </div>
   )
-}
+} 

@@ -3,9 +3,9 @@ import Link from 'next/link'
 import {  Target, Heart, CheckCircle } from 'lucide-react'
 
 export const metadata: Metadata = {
-  title: 'About Us - Lawn Mower Directory',
-  description: 'Learn about Lawn Mower Directory - your trusted source for finding professional lawn mower repair, maintenance, and sales services across the country.',
-  keywords: 'lawn mower directory about, lawn mower services, lawn care platform',
+  title: 'About Us - Lawn Mowing Directory',
+  description: 'Learn about Lawn Mowing Directory - your trusted source for finding professional lawn mowing services across the country.',
+  keywords: 'lawn mowing directory about, lawn mowing services, lawn care platform',
 }
 
 export default function AboutPage() {
@@ -14,9 +14,9 @@ export default function AboutPage() {
       {/* Hero Section */}
       <section className="bg-gradient-to-r from-green-600 to-green-800 text-white py-16">
         <div className="container mx-auto px-4 text-center">
-          <h1 className="text-5xl font-bold mb-4">About Lawn Mower Directory</h1>
+          <h1 className="text-5xl font-bold mb-4">About Lawn Mowing Near Me</h1>
           <p className="text-xl max-w-3xl mx-auto">
-            Connecting homeowners with trusted lawn mower professionals since 2024
+            Connecting homeowners with trusted lawn mowing professionals since 2024.  
           </p>
         </div>
       </section>
@@ -68,9 +68,9 @@ export default function AboutPage() {
               <div className="text-6xl mb-4">🌿</div>
               <h3 className="text-2xl font-bold mb-4">Our Story</h3>
               <p className="text-gray-600 leading-relaxed mb-4">
-                Lawn Mower Directory was born from a simple frustration: finding a reliable 
-                lawn mower repair service shouldn't be difficult. We created this platform 
-                to bring together the best lawn mower professionals in one place, making it 
+                Lawn Mowing Directory was born from a simple frustration: finding a reliable 
+                lawn mowing service shouldn't be difficult. We created this platform 
+                to bring together the best lawn mowing professionals in one place, making it 
                 easy for homeowners to find trusted services.
               </p>
               <p className="text-gray-600 leading-relaxed">

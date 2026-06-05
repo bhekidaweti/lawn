@@ -1,7 +1,9 @@
 import { createClient } from '@/utils/supabase/server'
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 import { SearchBar, ListingCard } from '@/components'
-import { MapPin, Filter, Award, Building, PlusCircle, AlertCircle } from 'lucide-react'
+import NearMeFilters from '@/components/NearmeFilter'
+import { MapPin, PlusCircle } from 'lucide-react'
 
 interface PageProps {
   params: Promise<{ city: string }>
@@ -12,12 +14,37 @@ function decodeCity(citySlug: string): string {
   return decodeURIComponent(citySlug).replace(/-/g, ' ')
 }
 
+// Helper to safely parse rating from text
+function parseRating(rating: string | null): number {
+  if (!rating) return 0
+  const parsed = parseFloat(rating)
+  return isNaN(parsed) ? 0 : parsed
+}
+
 export default async function NearMePage({ params, searchParams }: PageProps) {
-  const { city: citySlug } = await params
-  const resolvedSearchParams = await searchParams
+  // Ensure params and searchParams are properly awaited
+  if (!params) {
+    console.error('Params is undefined')
+    notFound()
+  }
+  
+  const resolvedParams = await params
+  const resolvedSearchParams = await searchParams || {}
+  
+  const citySlug = resolvedParams.city
+  if (!citySlug) {
+    console.error('City slug is missing')
+    notFound()
+  }
+  
   const city = decodeCity(citySlug)
   
   const supabase = await createClient()
+  
+  // Get filter values from URL
+  const selectedCategory = (resolvedSearchParams.category as string) || 'all'
+  const selectedRating = (resolvedSearchParams.rating as string) || ''
+  const sortBy = (resolvedSearchParams.sort as string) || 'rating'
   
   // Get businesses in this city
   let query = supabase
@@ -25,47 +52,65 @@ export default async function NearMePage({ params, searchParams }: PageProps) {
     .select('*')
     .eq('city', city)
   
-  const category = resolvedSearchParams.category as string
-  const rating = resolvedSearchParams.rating as string
-  const sortBy = resolvedSearchParams.sort as string || 'rating'
-  
-  if (category && category !== 'all') {
-    query = query.eq('category', category)
+  // Apply category filter
+  if (selectedCategory && selectedCategory !== 'all') {
+    query = query.eq('category', selectedCategory)
   }
   
-  let { data: businesses } = await query
+  let { data: businesses, error } = await query
   
-  if (rating && businesses) {
-    const minRating = parseFloat(rating)
-    businesses = businesses.filter(b => 
-      b.rating && parseFloat(b.rating) >= minRating
-    )
+  if (error) {
+    console.error('Error fetching businesses:', error)
+    businesses = []
   }
   
-  if (businesses) {
+  // Apply rating filter
+  if (selectedRating && businesses) {
+    const minRating = parseFloat(selectedRating)
+    businesses = businesses.filter(b => {
+      const rating = parseRating(b.rating)
+      return rating >= minRating
+    })
+  }
+  
+  // Apply sorting
+  if (businesses && businesses.length > 0) {
     switch (sortBy) {
       case 'rating':
-        businesses.sort((a, b) => parseFloat(b.rating || '0') - parseFloat(a.rating || '0'))
+        businesses.sort((a, b) => parseRating(b.rating) - parseRating(a.rating))
         break
       case 'name':
-        businesses.sort((a, b) => a.name.localeCompare(b.name))
+        businesses.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
         break
       case 'recent':
         businesses.sort((a, b) => 
           new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
         )
         break
+      default:
+        businesses.sort((a, b) => parseRating(b.rating) - parseRating(a.rating))
     }
   }
   
-  const categoriesInCity = [...new Set(businesses?.map(b => b.category).filter(Boolean))]
+  // Get unique categories in this city
+  const categoriesInCity = [...new Set(businesses?.map(b => b.category).filter(Boolean) || [])]
   const totalBusinesses = businesses?.length || 0
-  const avgRating = totalBusinesses > 0 ? businesses?.reduce((acc, b) => 
-    acc + (b.rating ? parseFloat(b.rating) : 0), 0
-  ) / totalBusinesses : 0
+  
+  // Calculate average rating
+  let avgRating = 0
+  if (totalBusinesses > 0) {
+    const ratingSum = businesses?.reduce((acc, b) => acc + parseRating(b.rating), 0) || 0
+    avgRating = ratingSum / totalBusinesses
+  }
+
+  const hasActiveFilters = selectedCategory !== 'all' || selectedRating !== '' || sortBy !== 'rating'
+
+  // If no businesses and no filters, still show the page (just empty state)
+  // Don't return 404 for empty cities
 
   return (
     <>
+      {/* Hero Section */}
       <section className="bg-gradient-to-r from-green-600 to-green-800 text-white py-12">
         <div className="container mx-auto px-4">
           <div className="flex items-center gap-2 text-sm mb-4">
@@ -96,97 +141,18 @@ export default async function NearMePage({ params, searchParams }: PageProps) {
 
       <div className="container mx-auto px-4 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Sidebar */}
+          {/* Sidebar - Client Component for filters */}
           <div className="lg:w-1/4">
-            <div className="bg-white rounded-lg shadow-md p-6 sticky top-4">
-              <div className="flex items-center gap-2 mb-4 pb-4 border-b">
-                <Filter size={20} />
-                <h3 className="font-bold text-lg">Filters</h3>
-              </div>
-              
-              <form className="space-y-6">
-                {categoriesInCity.length > 0 && (
-                  <div>
-                    <label className="font-medium mb-2 block">Category</label>
-                    <select 
-                      name="category" 
-                      defaultValue={category || 'all'}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-gree-500"
-                    >
-                      <option value="all">All Categories</option>
-                      {categoriesInCity.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                
-                <div>
-                  <label className="font-medium mb-2 block">Minimum Rating</label>
-                  <select 
-                    name="rating"
-                    defaultValue={rating || ''}
-                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-gree-500"
-                  >
-                    <option value="">Any Rating</option>
-                    <option value="4.5">4.5+ Stars</option>
-                    <option value="4">4.0+ Stars</option>
-                    <option value="3.5">3.5+ Stars</option>
-                    <option value="3">3.0+ Stars</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="font-medium mb-2 block">Sort By</label>
-                  <select 
-                    name="sort"
-                    defaultValue={sortBy}
-                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-gree-500"
-                  >
-                    <option value="rating">Highest Rated</option>
-                    <option value="name">Name A-Z</option>
-                    <option value="recent">Recently Added</option>
-                  </select>
-                </div>
-                
-                <button 
-                  type="submit"
-                  className="w-full bg-gree-600 text-white py-2 rounded-lg hover:bg-gree-700 transition"
-                >
-                  Apply Filters
-                </button>
-                
-                <Link 
-                  href={`/near-me/${citySlug}`}
-                  className="block text-center text-sm text-gray-500 hover:text-gree-600"
-                >
-                  Reset Filters
-                </Link>
-              </form>
-            </div>
-            
-            {totalBusinesses > 0 && (
-              <div className="bg-white rounded-lg shadow-md p-6 mt-6">
-                <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                  <Award size={20} />
-                  City Stats
-                </h3>
-                <div className="space-y-3">
-                  <div>
-                    <div className="text-2xl font-bold text-gree-600">{totalBusinesses}</div>
-                    <div className="text-sm text-gray-600">Total Businesses</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-gree-600">{avgRating.toFixed(1)}</div>
-                    <div className="text-sm text-gray-600">Average Rating</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-gree-600">{categoriesInCity.length}</div>
-                    <div className="text-sm text-gray-600">Categories Available</div>
-                  </div>
-                </div>
-              </div>
-            )}
+            <NearMeFilters
+              citySlug={citySlug}
+              city={city}
+              categoriesInCity={categoriesInCity}
+              totalBusinesses={totalBusinesses}
+              avgRating={avgRating}
+              selectedCategory={selectedCategory}
+              selectedRating={selectedRating}
+              sortBy={sortBy}
+            />
           </div>
 
           {/* Main Content */}
@@ -200,9 +166,20 @@ export default async function NearMePage({ params, searchParams }: PageProps) {
                 <div className="bg-white rounded-lg p-4 mb-4 flex flex-wrap justify-between items-center">
                   <div>
                     <p className="text-gray-600">
-                      Showing <span className="font-semibold">{businesses?.length || 0}</span> results in {city}
+                      Showing <span className="font-semibold text-green-600">{businesses?.length || 0}</span> results in {city}
+                      {hasActiveFilters && (
+                        <span className="text-sm text-gray-400 ml-2">(filtered)</span>
+                      )}
                     </p>
                   </div>
+                  {hasActiveFilters && (
+                    <Link 
+                      href={`/near-me/${citySlug}`}
+                      className="text-green-600 hover:text-green-700 text-sm flex items-center gap-1"
+                    >
+                      Clear all filters
+                    </Link>
+                  )}
                 </div>
                 
                 <div className="space-y-4">
@@ -213,16 +190,18 @@ export default async function NearMePage({ params, searchParams }: PageProps) {
               </>
             ) : (
               <div className="bg-white rounded-lg p-12 text-center">
-                <div className="inline-flex items-center justify-center w-20 h-20 bg-gree-100 rounded-full mb-6">
-                  <MapPin size={40} className="text-gree-600" />
+                <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
+                  <MapPin size={40} className="text-green-600" />
                 </div>
                 <h3 className="text-2xl font-bold mb-3">No businesses found in {city}</h3>
                 <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                  We couldn't find any lawn mower services in this area yet. 
-                  Be the first to list your business!
+                  {hasActiveFilters 
+                    ? "No businesses match your filter criteria. Try adjusting your filters."
+                    : "We couldn't find any lawn mower services in this area yet. Be the first to list your business!"
+                  }
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <button className="bg-gree-600 text-white px-6 py-3 rounded-lg hover:bg-gree-700 transition flex items-center gap-2 justify-center">
+                  <button className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition flex items-center gap-2 justify-center">
                     <PlusCircle size={20} />
                     Suggest a Business
                   </button>
@@ -236,6 +215,7 @@ export default async function NearMePage({ params, searchParams }: PageProps) {
         </div>
       </div>
       
+      {/* Popular Cities Section - Only show if no results */}
       {totalBusinesses === 0 && (
         <section className="bg-gray-100 py-12">
           <div className="container mx-auto px-4">
